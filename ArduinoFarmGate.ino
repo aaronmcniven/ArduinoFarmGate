@@ -1,6 +1,8 @@
 /* ArduinoFarmGate - Aaron McNiven */
 /* ATmega328P */
 
+#include <EEPROM.h>
+
 #include "SimpleTimer.h"
 #include "SimpleActuator.h"
 
@@ -53,6 +55,7 @@ SimpleActuator actuator;
 ADS1115 ADS(0x48);
 int16_t tripADC = 0;
 int16_t ADS_Static = 13150; /* Anything below this limit will also be treated as stall detection as some actuators have internal cut off end stop. Set to 0 to disable. 13150 = Approx. 100mA. */
+bool eeprom_adc = false;
 
 /* States: */
 
@@ -182,6 +185,15 @@ bool stallDetect() {
   return false;
 }
 
+void pulseTripLED(int count) {
+  for(int i = 0; i < count; ++i) {
+    digitalWrite(PIN_TRIP_LED, HIGH);
+    delay(300);
+    digitalWrite(PIN_TRIP_LED, LOW);
+    delay(300);
+  }
+}
+
 void setup() {
 
   Serial.begin(9600);
@@ -214,6 +226,59 @@ void setup() {
   pinMode(PIN_IN_OPENCLOSE, INPUT);
   pinMode(PIN_IN_OPENKO, INPUT);
   pinMode(PIN_IN_LOCK, INPUT);
+
+  /* BOOT OPTIONS: */
+
+  /* Hold PIN_IN_OPENCLOSE high during boot for 5 seconds: */
+
+  /* If nothing is stored in the EEPROM, tripADC will be read and stored. On boot it will be loaded and the potentiometer value will be ignored. */
+  /*  -> Trip LED will flash 8 times when value is stored to EEPROM. After this the CPU needs to be restarted to continue! */
+  /*  -> Trip LED will flash 10 times when EEPROM is erased. */
+
+  /* On boot, if the EEPROM is empty, the potentiometer value will be read and used. Nothing will be saved. */
+  /*  -> Trip LED will flash 2 times. */
+
+  /* On boot, if the EEPROM contains tripADC data, it will be loaded and the potentiometer value will be ignored. */
+  /*  -> Trip LED will flash 4 times. */
+
+  int16_t eepromRead = 0;
+  EEPROM.get(0, eepromRead);
+
+  if(eepromRead == 0 && !digitalRead(PIN_IN_OPENCLOSE)) {
+    pulseTripLED(2);
+  }
+
+  if(eepromRead > 0 && !digitalRead(PIN_IN_OPENCLOSE)) {
+    tripADC = eepromRead;
+    pulseTripLED(4);
+    eeprom_adc = true;
+  }
+
+  if(digitalRead(PIN_IN_OPENCLOSE)) {
+    
+    delay(3000);
+    
+    if(digitalRead(PIN_IN_OPENCLOSE)) {
+
+      if(eepromRead == 0) {
+        EEPROM.write(0, tripADC);
+        pulseTripLED(8); /* 5 Flashes on startup: Trip value saved to EEPROM. */
+
+        while(0) {
+          /* Require restart to load changes from EEPROM. */
+        }
+      }
+
+      if(eepromRead > 0) {
+        
+        for (int i = 0; i < EEPROM.length(); ++i) {
+          EEPROM.write(i, 0);
+        }
+        
+        pulseTripLED(10);
+      }
+    }
+  }
   
   setStatBits();
 
@@ -303,15 +368,11 @@ void loop() {
 
     /* If PIN_IN_OPENCLOSE goes high while the actuator is moving, stop: */
 
-    if(digitalRead(PIN_IN_OPENCLOSE) && !openCloseBlock) {
+    if(digitalRead(PIN_IN_OPENCLOSE)) {
       actuator.stop();
       state = State::STOPPED;
       delay(5000);
     }
-  }
-
-  if(!digitalRead(PIN_IN_OPENCLOSE)) {
-    openCloseBlock = false;
   }
 
   /* In an unknown state, allow trip sense LED to function: */
@@ -319,7 +380,10 @@ void loop() {
   if(state == State::UNK) {
     
     int16_t ADS_Stall = ADS.readADC(0);
-    tripADC = ADS.readADC(1);
+
+    if(!eeprom_adc) {
+      tripADC = ADS.readADC(1);
+    }
     
     if(ADS_Stall >= tripADC) {
       digitalWrite(PIN_TRIP_LED, HIGH);
@@ -332,7 +396,6 @@ void loop() {
 
   if(state == State::CLOSED || state == State::OPEN || state == State::OPENKO || state == State::STOPPED || state == State::FAULT) {
     digitalWrite(PIN_TRIP_LED, LOW);
-    openCloseBlock = 0;
   }
 
   /* Normal stop events: */
