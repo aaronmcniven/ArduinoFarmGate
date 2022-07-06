@@ -213,7 +213,7 @@ void bootConfig() {
 
   if(digitalRead(PIN_IN_OPENCLOSE)) {
     
-    delay(3000);
+    delay(1500);
     
     if(digitalRead(PIN_IN_OPENCLOSE)) {
 
@@ -292,8 +292,6 @@ void setup() {
   openWaitTime.setDuration(openWaitTimeMs);
   openCloseTimeout.setDuration(openCloseTimeoutMs);
   stallTimer.setDuration(250);
-
-  delay(3000);
 }
 
 void loop() {
@@ -309,15 +307,23 @@ void loop() {
     state = State::FAULT;
     
     digitalWrite(PIN_TRIP_LED, LOW);
-    delay(3000);
+    delay(1500);
     digitalWrite(PIN_TRIP_LED, HIGH);
-    delay(150);
+    delay(75);
     digitalWrite(PIN_TRIP_LED, LOW);
-    delay(150);
+    delay(75);
     digitalWrite(PIN_TRIP_LED, HIGH);
-    delay(150);
+    delay(75);
     digitalWrite(PIN_TRIP_LED, LOW);
-    delay(3000);
+    delay(75);
+    digitalWrite(PIN_TRIP_LED, HIGH);
+    delay(75);
+    digitalWrite(PIN_TRIP_LED, LOW);
+    delay(75);
+    digitalWrite(PIN_TRIP_LED, HIGH);
+    delay(75);
+    digitalWrite(PIN_TRIP_LED, LOW);
+    delay(1500);
   }
 
   setStatBits();
