@@ -230,7 +230,7 @@ void setup() {
 
   openWaitTime.setDuration(openWaitTimeMs);
   openCloseTimeout.setDuration(openCloseTimeoutMs);
-  stallTimer.setDuration(250);
+  stallTimer.setDuration(200);
 }
 
 void loop() {
