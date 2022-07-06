@@ -54,7 +54,6 @@ SimpleActuator actuator;
 
 ADS1115 ADS(0x48);
 int16_t tripADC = 0;
-bool eeprom_adc = false;
 
 /* States: */
 
@@ -333,10 +332,8 @@ void loop() {
     
     int16_t ADS_Stall = ADS.readADC(0);
 
-    if(!eeprom_adc) {
-      tripADC = ADS.readADC(1);
-    }
-    
+    tripADC = ADS.readADC(1);
+
     if(ADS_Stall >= tripADC) {
       digitalWrite(PIN_TRIP_LED, HIGH);
     } else {
