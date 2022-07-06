@@ -157,28 +157,25 @@ bool stallDetect() {
 
   /* Trip if tripADC is exceeded for timer duration. */
 
-  int16_t ADS_Stall = ADS.readADC(0);
+  int16_t readADC = ADS.readADC(0);
 
-  if(ADS_Stall >= tripADC) {
+  if(readADC >= tripADC) {
     digitalWrite(PIN_TRIP_LED, HIGH);
   } else {
     digitalWrite(PIN_TRIP_LED, LOW);
   }
 
-  if(ADS_Stall >= tripADC || ADS_Stall <= ADS_Static) {
-    
+  if(readADC >= tripADC || readADC <= ADS_Static) {
     if(state == State::CLOSING || state == State::OPENING || state == State::OPENINGKO) {
       stallTimer.startTimer();
     }
 
     if(stallTimer.expired(false)) {
-    
       stallTimer.stopTimer();
       return true;
     }
     
   } else {
-    
     stallTimer.stopTimer();
   }
 
@@ -194,6 +191,65 @@ void pulseTripLED(int count) {
   }
 }
 
+void bootConfig() {
+
+  /* BOOT OPTIONS: */
+
+  /* Hold PIN_IN_OPENCLOSE high during boot for 5 seconds: */
+
+  /* If nothing is stored in the EEPROM, tripADC will be read and stored. On boot it will be loaded and the potentiometer value will be ignored. */
+  /*  -> Trip LED will flash 6 times when value is stored to EEPROM. After this the CPU needs to be restarted to continue! */
+  /*  -> Trip LED will flash 8 times when EEPROM is erased. */
+
+  /* On boot, if the EEPROM is empty, the potentiometer value will be read and used. Nothing will be saved. */
+  /*  -> Trip LED will flash 2 times. */
+
+  /* On boot, if the EEPROM contains tripADC data, it will be loaded and the potentiometer value will be ignored. */
+  /*  -> Trip LED will flash 4 times. */
+
+  int16_t eepromRead = 0;
+  
+  EEPROM.get(0, eepromRead);
+
+  if(digitalRead(PIN_IN_OPENCLOSE)) {
+    
+    delay(3000);
+    
+    if(digitalRead(PIN_IN_OPENCLOSE)) {
+
+      if(eepromRead == 0) {
+        
+        EEPROM.put(0, tripADC);
+        pulseTripLED(6); /* 6 Flashes on startup: Trip value saved to EEPROM. */
+
+        while(0) {
+          /* Require restart to load changes from EEPROM. */
+        }
+      }
+
+      if(eepromRead > 0) {
+        
+        for (int i = 0; i < EEPROM.length(); ++i) {
+          EEPROM.write(i, 0);
+        }
+        
+        pulseTripLED(8);
+      }
+    }
+  } else {
+
+    if(eepromRead == 0) {
+      pulseTripLED(2);
+    }
+  
+    if(eepromRead > 0) {
+      tripADC = eepromRead;
+      pulseTripLED(4);
+      eeprom_adc = true;
+    }
+  }
+}
+
 void setup() {
 
   Serial.begin(9600);
@@ -206,7 +262,7 @@ void setup() {
   ADS.requestADC(0);
   ADS.requestADC(1);
 
-  delay(1000);
+  delay(500);
 
   /* Read trip potentiometer. */
   tripADC = ADS.readADC(1);
@@ -227,58 +283,7 @@ void setup() {
   pinMode(PIN_IN_OPENKO, INPUT);
   pinMode(PIN_IN_LOCK, INPUT);
 
-  /* BOOT OPTIONS: */
-
-  /* Hold PIN_IN_OPENCLOSE high during boot for 5 seconds: */
-
-  /* If nothing is stored in the EEPROM, tripADC will be read and stored. On boot it will be loaded and the potentiometer value will be ignored. */
-  /*  -> Trip LED will flash 8 times when value is stored to EEPROM. After this the CPU needs to be restarted to continue! */
-  /*  -> Trip LED will flash 10 times when EEPROM is erased. */
-
-  /* On boot, if the EEPROM is empty, the potentiometer value will be read and used. Nothing will be saved. */
-  /*  -> Trip LED will flash 2 times. */
-
-  /* On boot, if the EEPROM contains tripADC data, it will be loaded and the potentiometer value will be ignored. */
-  /*  -> Trip LED will flash 4 times. */
-
-  int16_t eepromRead = 0;
-  EEPROM.get(0, eepromRead);
-
-  if(eepromRead == 0 && !digitalRead(PIN_IN_OPENCLOSE)) {
-    pulseTripLED(2);
-  }
-
-  if(eepromRead > 0 && !digitalRead(PIN_IN_OPENCLOSE)) {
-    tripADC = eepromRead;
-    pulseTripLED(4);
-    eeprom_adc = true;
-  }
-
-  if(digitalRead(PIN_IN_OPENCLOSE)) {
-    
-    delay(3000);
-    
-    if(digitalRead(PIN_IN_OPENCLOSE)) {
-
-      if(eepromRead == 0) {
-        EEPROM.write(0, tripADC);
-        pulseTripLED(8); /* 5 Flashes on startup: Trip value saved to EEPROM. */
-
-        while(0) {
-          /* Require restart to load changes from EEPROM. */
-        }
-      }
-
-      if(eepromRead > 0) {
-        
-        for (int i = 0; i < EEPROM.length(); ++i) {
-          EEPROM.write(i, 0);
-        }
-        
-        pulseTripLED(10);
-      }
-    }
-  }
+  bootConfig();
   
   setStatBits();
 
@@ -286,7 +291,9 @@ void setup() {
 
   openWaitTime.setDuration(openWaitTimeMs);
   openCloseTimeout.setDuration(openCloseTimeoutMs);
-  stallTimer.setDuration(400);
+  stallTimer.setDuration(250);
+
+  delay(3000);
 }
 
 void loop() {
@@ -371,7 +378,7 @@ void loop() {
     if(digitalRead(PIN_IN_OPENCLOSE)) {
       actuator.stop();
       state = State::STOPPED;
-      delay(5000);
+      delay(2500);
     }
   }
 
@@ -403,20 +410,20 @@ void loop() {
   if(state == State::CLOSING && (digitalRead(PIN_IN_ENDSTOP) || stallDetect())) {
     state = State::CLOSED;
     actuator.stop();
-    delay(2000);
+    delay(1000);
   }
 
   if(state == State::OPENING && (digitalRead(PIN_IN_ENDSTOP) || stallDetect())) {
     state = State::OPEN;
     actuator.stop();
     openWaitTime.restartTimer();
-    delay(2000);
+    delay(1000);
   }
 
   if(state == State::OPENINGKO && (digitalRead(PIN_IN_ENDSTOP) || stallDetect())) {
     state = State::OPENKO;
     actuator.stop();
-    delay(2000);
+    delay(1000);
   }
 
   if(state == State::OPEN && openWaitTime.expired(false)) {
