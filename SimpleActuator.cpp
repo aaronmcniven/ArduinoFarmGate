@@ -105,7 +105,9 @@ void SimpleActuator::stop(bool requireReboot) {
 	digitalWrite(m_closePin, LOW);
 	digitalWrite(m_lockPin, LOW);
 	
-	m_disable = requireReboot;
+  if(requireReboot) {
+	  m_disable = true;
+  }
 }
 
 void SimpleActuator::setLockDelay(int lockDelay) {

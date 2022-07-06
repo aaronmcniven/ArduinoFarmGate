@@ -54,7 +54,6 @@ SimpleActuator actuator;
 
 ADS1115 ADS(0x48);
 int16_t tripADC = 0;
-int16_t ADS_Static = 13150; /* Anything below this limit will also be treated as stall detection as some actuators have internal cut off end stop. Set to 0 to disable. 13150 = Approx. 100mA. */
 bool eeprom_adc = false;
 
 /* States: */
@@ -165,7 +164,8 @@ bool stallDetect() {
     digitalWrite(PIN_TRIP_LED, LOW);
   }
 
-  if(readADC >= tripADC || readADC <= ADS_Static) {
+  if(readADC >= tripADC) {
+    
     if(state == State::CLOSING || state == State::OPENING || state == State::OPENINGKO) {
       stallTimer.startTimer();
     }
@@ -188,65 +188,6 @@ void pulseTripLED(int count) {
     delay(300);
     digitalWrite(PIN_TRIP_LED, LOW);
     delay(300);
-  }
-}
-
-void bootConfig() {
-
-  /* BOOT OPTIONS: */
-
-  /* Hold PIN_IN_OPENCLOSE high during boot for 5 seconds: */
-
-  /* If nothing is stored in the EEPROM, tripADC will be read and stored. On boot it will be loaded and the potentiometer value will be ignored. */
-  /*  -> Trip LED will flash 6 times when value is stored to EEPROM. After this the CPU needs to be restarted to continue! */
-  /*  -> Trip LED will flash 8 times when EEPROM is erased. */
-
-  /* On boot, if the EEPROM is empty, the potentiometer value will be read and used. Nothing will be saved. */
-  /*  -> Trip LED will flash 2 times. */
-
-  /* On boot, if the EEPROM contains tripADC data, it will be loaded and the potentiometer value will be ignored. */
-  /*  -> Trip LED will flash 4 times. */
-
-  int16_t eepromRead = 0;
-  
-  EEPROM.get(0, eepromRead);
-
-  if(digitalRead(PIN_IN_OPENCLOSE)) {
-    
-    delay(1500);
-    
-    if(digitalRead(PIN_IN_OPENCLOSE)) {
-
-      if(eepromRead == 0) {
-        
-        EEPROM.put(0, tripADC);
-        pulseTripLED(6); /* 6 Flashes on startup: Trip value saved to EEPROM. */
-
-        while(0) {
-          /* Require restart to load changes from EEPROM. */
-        }
-      }
-
-      if(eepromRead > 0) {
-        
-        for (int i = 0; i < EEPROM.length(); ++i) {
-          EEPROM.write(i, 0);
-        }
-        
-        pulseTripLED(8);
-      }
-    }
-  } else {
-
-    if(eepromRead == 0) {
-      pulseTripLED(2);
-    }
-  
-    if(eepromRead > 0) {
-      tripADC = eepromRead;
-      pulseTripLED(4);
-      eeprom_adc = true;
-    }
   }
 }
 
@@ -283,8 +224,6 @@ void setup() {
   pinMode(PIN_IN_OPENKO, INPUT);
   pinMode(PIN_IN_LOCK, INPUT);
 
-  bootConfig();
-  
   setStatBits();
 
   actuator.setPins(PIN_RELAY_OPEN, PIN_RELAY_CLOSE, PIN_RELAY_LOCK);
@@ -381,7 +320,7 @@ void loop() {
 
     /* If PIN_IN_OPENCLOSE goes high while the actuator is moving, stop: */
 
-    if(digitalRead(PIN_IN_OPENCLOSE)) {
+    if(digitalRead(PIN_IN_OPENCLOSE) && openCloseTimeout.getElapsed() > 1500) {
       actuator.stop();
       state = State::STOPPED;
       delay(2500);
@@ -413,23 +352,23 @@ void loop() {
 
   /* Normal stop events: */
 
-  if(state == State::CLOSING && (digitalRead(PIN_IN_ENDSTOP) || stallDetect())) {
+  if(state == State::CLOSING && (digitalRead(PIN_IN_ENDSTOP) || stallDetect()) && openCloseTimeout.getElapsed() > 100) {
     state = State::CLOSED;
     actuator.stop();
-    delay(1000);
+    pulseTripLED(2);
   }
 
-  if(state == State::OPENING && (digitalRead(PIN_IN_ENDSTOP) || stallDetect())) {
+  if(state == State::OPENING && (digitalRead(PIN_IN_ENDSTOP) || stallDetect()) && openCloseTimeout.getElapsed() > 100) {
     state = State::OPEN;
     actuator.stop();
     openWaitTime.restartTimer();
-    delay(1000);
+    pulseTripLED(3);
   }
 
-  if(state == State::OPENINGKO && (digitalRead(PIN_IN_ENDSTOP) || stallDetect())) {
+  if(state == State::OPENINGKO && (digitalRead(PIN_IN_ENDSTOP) || stallDetect()) && openCloseTimeout.getElapsed() > 100) {
     state = State::OPENKO;
     actuator.stop();
-    delay(1000);
+    pulseTripLED(4);
   }
 
   if(state == State::OPEN && openWaitTime.expired(false)) {
