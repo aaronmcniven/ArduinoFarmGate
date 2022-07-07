@@ -35,6 +35,7 @@
 
 #define openWaitTimeMs          60000     /* Automatically close after this time. */
 #define openCloseTimeoutMs      45000     /* Trigger fault after this time with no stop event. */
+#define stallTimerMs            200       /* If a stall is detected for longer than this time the actuator will stop. */
 
 /* Timers: */
 
@@ -229,7 +230,7 @@ void setup() {
 
   openWaitTime.setDuration(openWaitTimeMs);
   openCloseTimeout.setDuration(openCloseTimeoutMs);
-  stallTimer.setDuration(200);
+  stallTimer.setDuration(stallTimerMs);
 }
 
 void loop() {
@@ -319,7 +320,7 @@ void loop() {
 
     /* If PIN_IN_OPENCLOSE goes high while the actuator is moving, stop: */
 
-    if(digitalRead(PIN_IN_OPENCLOSE) && openCloseTimeout.getElapsed() > 1500) {
+    if(digitalRead(PIN_IN_OPENCLOSE) && openCloseTimeout.getElapsed() >= 1500) {
       actuator.stop();
       state = State::STOPPED;
       delay(2500);
@@ -349,20 +350,20 @@ void loop() {
 
   /* Normal stop events: */
 
-  if(state == State::CLOSING && (digitalRead(PIN_IN_ENDSTOP) || stallDetect()) && openCloseTimeout.getElapsed() > 100) {
+  if(state == State::CLOSING && (digitalRead(PIN_IN_ENDSTOP) || stallDetect()) && openCloseTimeout.getElapsed() >= 100) {
     state = State::CLOSED;
     actuator.stop();
     pulseTripLED(2);
   }
 
-  if(state == State::OPENING && (digitalRead(PIN_IN_ENDSTOP) || stallDetect()) && openCloseTimeout.getElapsed() > 100) {
+  if(state == State::OPENING && (digitalRead(PIN_IN_ENDSTOP) || stallDetect()) && openCloseTimeout.getElapsed() >= 100) {
     state = State::OPEN;
     actuator.stop();
     openWaitTime.restartTimer();
     pulseTripLED(3);
   }
 
-  if(state == State::OPENINGKO && (digitalRead(PIN_IN_ENDSTOP) || stallDetect()) && openCloseTimeout.getElapsed() > 100) {
+  if(state == State::OPENINGKO && (digitalRead(PIN_IN_ENDSTOP) || stallDetect()) && openCloseTimeout.getElapsed() >= 100) {
     state = State::OPENKO;
     actuator.stop();
     pulseTripLED(4);
