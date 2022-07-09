@@ -263,6 +263,8 @@ void loop() {
 
       if(readADC >= movingADC) {
 
+        actuator.stop(true);
+
         /* Try to stop voltage using H-Bridge: */
         
         digitalWrite(PIN_RELAY_OPEN, HIGH);
@@ -287,7 +289,6 @@ void loop() {
           }
         }
 
-        actuator.stop(true);
         state = State::FAULT;
         setStatBits();
   
