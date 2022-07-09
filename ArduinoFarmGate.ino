@@ -257,20 +257,26 @@ void loop() {
       /* Actuator is active when it shouldn't be: */
 
       actuator.stop();
-      delay(100);
+      delay(150);
+
+      readADC = ADS.readADC(0);
 
       if(readADC >= movingADC) {
 
         /* Try to stop voltage using H-Bridge: */
         
         digitalWrite(PIN_RELAY_OPEN, HIGH);
-        delay(100);
+        delay(150);
+
+        readADC = ADS.readADC(0);
 
         if(readADC >= movingADC) {
 
           digitalWrite(PIN_RELAY_OPEN, LOW);
           digitalWrite(PIN_RELAY_CLOSE, HIGH);
-          delay(100);
+          delay(150);
+
+          readADC = ADS.readADC(0);
 
           if(readADC >= movingADC) {
 
