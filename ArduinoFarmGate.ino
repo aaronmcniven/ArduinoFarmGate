@@ -33,7 +33,7 @@
 
 #define PIN_IN_ENDSTOP          9         /* Endstop input. Pull high to trigger stop event. */
 
-#define openWaitTimeMs          60000     /* Automatically close after this time. */
+#define openWaitTimeMs          15000     /* Automatically close after this time. */
 #define openCloseTimeoutMs      45000     /* Trigger fault after this time with no stop event. */
 #define stallTimerMs            200       /* If a stall is detected for longer than this time the actuator will stop. */
 
@@ -287,17 +287,14 @@ void loop() {
           }
         }
 
+        actuator.stop(true);
         state = State::FAULT;
         setStatBits();
   
-        while(1) {
+        while(readADC < movingADC) {
           
-          /* Stop forever... */
-  
-          digitalWrite(PIN_TRIP_LED, HIGH);
-          delay(25);
-          digitalWrite(PIN_TRIP_LED, LOW);
-          delay(25);
+          readADC = ADS.readADC(0);
+          delay(50);
         }  
       }
     }
