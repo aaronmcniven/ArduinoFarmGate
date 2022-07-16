@@ -56,10 +56,6 @@ SimpleActuator actuator;
 ADS1115 ADS(0x48);
 int16_t tripADC = 0;
 
-/* If the ADC reading from the ACS711 is >= to this value, the actuator is assumed to be moving. */
-/* Used to try and stop runaway situation. */
-int16_t movingADC = 0;
-
 /* States: */
 
 enum State {  /* Stat bit output: */
@@ -209,10 +205,6 @@ void setup() {
 
   delay(500);
 
-  /* Read trip potentiometer. */
-  tripADC = ADS.readADC(1);
-  movingADC = tripADC / 2;
-
   pinMode(PIN_RELAY_LOCK, OUTPUT);
   pinMode(PIN_RELAY_OPEN, OUTPUT);
   pinMode(PIN_RELAY_CLOSE, OUTPUT);
@@ -246,61 +238,6 @@ void loop() {
     actuator.stop(true);
   }
 
-  /* Handle runaway situation: */
-  
-  int16_t readADC = ADS.readADC(0);
-
-  if(state != State::CLOSING && state != State::OPENING && state != State::OPENINGKO) {
-
-    if(readADC >= movingADC) {
-
-      /* Actuator is active when it shouldn't be: */
-
-      actuator.stop();
-      delay(150);
-
-      readADC = ADS.readADC(0);
-
-      if(readADC >= movingADC) {
-
-        actuator.stop(true);
-
-        /* Try to stop voltage using H-Bridge: */
-        
-        digitalWrite(PIN_RELAY_OPEN, HIGH);
-        delay(150);
-
-        readADC = ADS.readADC(0);
-
-        if(readADC >= movingADC) {
-
-          digitalWrite(PIN_RELAY_OPEN, LOW);
-          digitalWrite(PIN_RELAY_CLOSE, HIGH);
-          delay(150);
-
-          readADC = ADS.readADC(0);
-
-          if(readADC >= movingADC) {
-
-            /* Nothing else can be done: */
-
-            digitalWrite(PIN_RELAY_OPEN, LOW);
-            digitalWrite(PIN_RELAY_CLOSE, LOW);
-          }
-        }
-
-        state = State::FAULT;
-        setStatBits();
-  
-        while(readADC < movingADC) {
-          
-          readADC = ADS.readADC(0);
-          delay(50);
-        }  
-      }
-    }
-  }
-
   if(actuator.disabled()) {
     
     state = State::FAULT;
@@ -324,6 +261,9 @@ void loop() {
     digitalWrite(PIN_TRIP_LED, LOW);
     delay(1500);
   }
+
+  /* Read trip potentiometer. */
+  tripADC = ADS.readADC(1);
 
   setStatBits();
  
@@ -392,8 +332,6 @@ void loop() {
   if(state == State::UNK) {
     
     int16_t ADS_Stall = ADS.readADC(0);
-
-    tripADC = ADS.readADC(1);
 
     if(ADS_Stall >= tripADC) {
       digitalWrite(PIN_TRIP_LED, HIGH);
